@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>¿Qué tipo de entrenador sos?</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;700&family=Nunito:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#16213e; --red:#e63946; --white:#fbfbf8; --line:#d9dce6; --muted:#5b6478; --gold:#f4b400;
+  --bg:#eef1f8; --card:#ffffff;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --ink:#f2f4fb; --white:#1b2340; --line:#34406a; --muted:#aab3cf; --bg:#101629; --card:#1b2340; }
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  min-height:100vh; background:var(--bg); color:var(--ink);
+  font-family:'Nunito',system-ui,sans-serif; font-weight:500; line-height:1.5;
+  display:flex; justify-content:center; padding:24px 16px 48px;
+}
+main{width:100%; max-width:560px}
+h1,h2,h3{font-family:'Fredoka','Nunito',system-ui,sans-serif; line-height:1.15; margin:0}
+
+/* Pokéball progress */
+.ball{
+  position:relative; width:88px; height:88px; margin:8px auto 18px; border-radius:50%;
+  border:5px solid #16213e; overflow:hidden;
+  background:linear-gradient(#e63946 0 50%, #fbfbf8 50% 100%);
+  transition:transform .5s cubic-bezier(.3,1.6,.5,1);
+}
+.ball::before{content:""; position:absolute; left:0; right:0; top:calc(50% - 5px); height:10px; background:#16213e}
+.ball::after{content:""; position:absolute; width:26px; height:26px; border-radius:50%; background:#fbfbf8;
+  border:5px solid #16213e; left:calc(50% - 13px); top:calc(50% - 13px); z-index:2}
+.ball.spin{transform:rotate(360deg)}
+.bar{height:8px; background:var(--line); border-radius:99px; overflow:hidden; margin:0 0 22px}
+.bar i{display:block; height:100%; width:0; background:var(--red); border-radius:99px; transition:width .35s}
+
+.card{background:var(--card); border:2px solid var(--line); border-radius:20px; padding:24px 20px}
+.step{color:var(--muted); font-size:.9rem; margin:0 0 6px}
+h2{font-size:1.6rem; margin-bottom:6px}
+.hint{color:var(--muted); margin:0 0 18px}
+
+.opts{display:grid; gap:10px}
+.opt{
+  font:inherit; font-weight:700; text-align:left; cursor:pointer; color:var(--ink);
+  background:var(--card); border:2px solid var(--line); border-radius:14px; padding:13px 16px;
+  transition:border-color .15s, transform .1s, background .15s;
+}
+.opt:hover{border-color:var(--red)}
+.opt:active{transform:scale(.98)}
+.opt:focus-visible,.txt:focus-visible,.go:focus-visible{outline:3px solid var(--gold); outline-offset:2px}
+.opt small{display:block; font-weight:500; color:var(--muted)}
+
+.types{display:grid; grid-template-columns:repeat(3,1fr); gap:8px}
+.types .opt{text-align:center; padding:11px 6px; font-size:.95rem; color:#fff; border:2px solid transparent}
+.types .opt:hover{border-color:var(--ink)}
+
+.txt{
+  width:100%; font:inherit; font-weight:700; color:var(--ink); background:var(--card);
+  border:2px solid var(--line); border-radius:14px; padding:13px 16px; margin-bottom:12px;
+}
+.go{
+  font:inherit; font-family:'Fredoka',sans-serif; font-weight:700; font-size:1.05rem; cursor:pointer;
+  width:100%; background:var(--red); color:#fff; border:0; border-radius:14px; padding:14px;
+}
+.go:disabled{opacity:.45; cursor:not-allowed}
+
+/* Result */
+.result{text-align:center}
+.badge{display:inline-block; background:var(--gold); color:#16213e; font-weight:700; border-radius:99px; padding:4px 14px; margin-bottom:10px; font-size:.9rem}
+.result h2{font-size:2rem}
+.result p{margin:12px 0 0}
+.stats{display:grid; gap:10px; text-align:left; margin-top:20px}
+.stat{display:grid; grid-template-columns:110px 1fr; align-items:center; gap:10px; font-size:.95rem}
+.stat span{font-weight:700}
+.stat div{height:12px; background:var(--line); border-radius:99px; overflow:hidden}
+.stat div i{display:block; height:100%; background:var(--ink); border-radius:99px; width:0; transition:width .9s .2s}
+.fade{animation:in .35s ease both}
+@keyframes in{from{opacity:0; transform:translateY(8px)}to{opacity:1; transform:none}}
+@media (prefers-reduced-motion: reduce){ .fade{animation:none} .ball{transition:none} .bar i,.stat div i{transition:none} }
+</style>
+</head>
+<body>
+<main>
+  <div class="ball" id="ball" aria-hidden="true"></div>
+  <div class="bar" aria-hidden="true"><i id="bar"></i></div>
+  <section class="card" id="card" aria-live="polite"></section>
+</main>
+
+<script>
+/* ============================================================
+   CONFIGURACIÓN: pegá acá tu endpoint de Formspree (o Web3Forms).
+   Ejemplo: "https://formspree.io/f/abcdwxyz"
+   Si queda vacío, el test funciona igual pero no manda nada.
+   ============================================================ */
+const FORM_ENDPOINT = "https://formspree.io/f/xeaagbgb";
+
+const TYPES = [
+  ["Normal","#8a8a6e"],["Fuego","#e8591a"],["Agua","#3b82d6"],["Planta","#4a9d3f"],
+  ["Eléctrico","#d9a400"],["Hielo","#4fb6c4"],["Lucha","#b3281f"],["Veneno","#8b3fa8"],
+  ["Tierra","#a98638"],["Volador","#6f7fd0"],["Psíquico","#e0457f"],["Bicho","#8a9a14"],
+  ["Roca","#8f7a2c"],["Fantasma","#5b4a8a"],["Dragón","#4a30c9"],["Siniestro","#5a463a"],
+  ["Acero","#6b7a8d"],["Hada","#d86fb0"]
+];
+
+/* kind: opts | types | text */
+const Q = [
+  {k:"nombre",   kind:"text", t:"¿Cómo te llamás, entrenador?", h:"Así te registramos en el Pokédex.", ph:"Tu nombre"},
+  {k:"region",   kind:"opts", t:"¿Dónde empezarías tu aventura?", o:[
+      "Kanto","Johto","Hoenn","Sinnoh","Teselia (Unova)","Kalos","Alola","Galar","Paldea"]},
+  {k:"inicial",  kind:"opts", t:"Llegás al laboratorio. ¿Qué inicial elegís?", o:["Planta","Fuego","Agua"]},
+  {k:"tipo",     kind:"types", t:"Tu equipo ideal es de un solo tipo. ¿Cuál?", h:"Tocá uno."},
+  {k:"favorito", kind:"text", t:"¿Cuál es tu Pokémon favorito?", h:"El que sea, sin pensarlo mucho.", ph:"Ej: Charizard"},
+  {k:"legendario", kind:"text", t:"¿Y tu legendario favorito?", ph:"Ej: Rayquaza"},
+  {k:"shiny",    kind:"opts", t:"Aparece un Pokémon de otro color (un shiny). ¿Qué hacés?", o:[
+      "Lo capturo sí o sí, los shiny son lo mejor","Lo capturo, pero no me obsesiona","Me da igual, prefiero los colores normales"]},
+  {k:"medio",    kind:"opts", t:"¿Dónde vivís más el mundo Pokémon?", o:["Juegos","Anime","Cartas","Un poco de todo"]},
+  {k:"estilo",   kind:"opts", t:"En una batalla, tu estrategia es…", o:[
+      "Atacar fuerte y rápido","Aguantar y desgastar al rival","Cambiar y adaptarme según el rival","Ir con mi equipo favorito, sin importar nada"]},
+  {k:"real",     kind:"text", t:"Última: si pudieras tener un Pokémon en la vida real, ¿cuál sería?", ph:"Ej: Eevee"}
+];
+
+const A = {};
+let i = 0;
+const $ = id => document.getElementById(id);
+const card = $("card"), bar = $("bar"), ball = $("ball");
+
+function esc(s){ return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+function progress(){
+  bar.style.width = (i / Q.length * 100) + "%";
+  ball.classList.toggle("spin", i % 2 === 1);
+}
+
+function show(){
+  if(i >= Q.length) return finish();
+  progress();
+  const q = Q[i];
+  let body = "";
+  if(q.kind === "opts"){
+    body = '<div class="opts">' + q.o.map(o => `<button class="opt" data-v="${esc(o)}">${esc(o)}</button>`).join("") + '</div>';
+  } else if(q.kind === "types"){
+    body = '<div class="types">' + TYPES.map(([n,c]) => `<button class="opt" style="background:${c}" data-v="${n}">${n}</button>`).join("") + '</div>';
+  } else {
+    body = `<input class="txt" id="inp" type="text" maxlength="40" placeholder="${esc(q.ph||"")}" autocomplete="off">
+            <button class="go" id="next" disabled>Siguiente</button>`;
+  }
+  card.innerHTML = `<div class="fade"><p class="step">Pregunta ${i+1} de ${Q.length}</p><h2>${esc(q.t)}</h2>${q.h?`<p class="hint">${esc(q.h)}</p>`:'<p class="hint"></p>'}${body}</div>`;
+
+  if(q.kind === "text"){
+    const inp = $("inp"), nx = $("next");
+    inp.addEventListener("input", () => nx.disabled = !inp.value.trim());
+    const go = () => { if(inp.value.trim()){ A[q.k] = inp.value.trim(); i++; show(); } };
+    nx.addEventListener("click", go);
+    inp.addEventListener("keydown", e => { if(e.key === "Enter") go(); });
+    inp.focus({preventScroll:true});
+  } else {
+    card.querySelectorAll(".opt").forEach(b => b.addEventListener("click", () => { A[q.k] = b.dataset.v; i++; show(); }));
+  }
+}
+
+/* ----- Resultado: tipo de entrenador ----- */
+const RESULTS = {
+  campeon:{n:"Campeón de la Liga", d:"Vas al frente. Preferís ganar la batalla en pocos turnos y no te ponés a dudar. Los gimnasios te duran poco."},
+  estratega:{n:"Estratega de Batalla", d:"Pensás cada movimiento. Para vos una batalla es un tablero de ajedrez, y siempre tenés un plan B."},
+  coleccionista:{n:"Coleccionista Legendario", d:"Lo tuyo es juntar, completar y cuidar. Tu Pokédex (y tus cartas) son tu orgullo, y los shiny son tu debilidad."},
+  explorador:{n:"Explorador de Regiones", d:"Vos viajás por la aventura, no por las medallas. Cada ruta, cada ciudad y cada Pokémon nuevo cuenta."}
+};
+
+function score(){
+  const s = {campeon:0, estratega:0, coleccionista:0, explorador:0};
+  const e = A.estilo || "";
+  if(e.startsWith("Atacar")) s.campeon += 3;
+  if(e.startsWith("Aguantar")) s.estratega += 2;
+  if(e.startsWith("Cambiar")) s.estratega += 3;
+  if(e.startsWith("Ir con")) s.explorador += 2;
+  if(A.shiny && A.shiny.startsWith("Lo capturo sí")) s.coleccionista += 3;
+  if(A.shiny && A.shiny.startsWith("Lo capturo, pero")) s.coleccionista += 1;
+  if(A.medio === "Cartas") s.coleccionista += 2;
+  if(A.medio === "Juegos") s.estratega += 1;
+  if(A.medio === "Anime") s.explorador += 2;
+  if(A.medio === "Un poco de todo") s.explorador += 1;
+  if(A.inicial === "Fuego") s.campeon += 1;
+  if(A.inicial === "Agua") s.estratega += 1;
+  if(A.inicial === "Planta") s.explorador += 1;
+  return s;
+}
+
+function finish(){
+  bar.style.width = "100%";
+  ball.classList.add("spin");
+  const s = score();
+  const top = Object.keys(s).sort((a,b) => s[b]-s[a])[0];
+  const r = RESULTS[top];
+  const max = Math.max(...Object.values(s), 1);
+  const names = {campeon:"Ataque", estratega:"Estrategia", coleccionista:"Colección", explorador:"Aventura"};
+  const stats = Object.keys(s).map(k =>
+    `<div class="stat"><span>${names[k]}</span><div><i data-w="${Math.round(s[k]/max*100)}"></i></div></div>`).join("");
+  const nombre = A.nombre ? esc(A.nombre) : "Entrenador";
+  card.innerHTML = `<div class="result fade">
+    <span class="badge">Resultado de ${nombre}</span>
+    <h2>${r.n}</h2>
+    <p>${r.d}</p>
+    <div class="stats">${stats}</div>
+    <p style="margin-top:22px;color:var(--muted)">¡Gracias por completar el test! Ya podés cerrar esta página.</p>
+  </div>`;
+  requestAnimationFrame(() => setTimeout(() =>
+    card.querySelectorAll(".stat i").forEach(el => el.style.width = el.dataset.w + "%"), 60));
+  send(r.n);
+}
+
+/* ----- Envío silencioso por mail (Formspree) ----- */
+function send(resultado){
+  const payload = {
+    _subject: "Test Pokémon: respuestas de " + (A.nombre || "tu amigo"),
+    Nombre: A.nombre,
+    "Región favorita": A.region,
+    "Inicial": A.inicial,
+    "Tipo favorito": A.tipo,
+    "Pokémon favorito": A.favorito,
+    "Legendario favorito": A.legendario,
+    "Shiny": A.shiny,
+    "Dónde vive Pokémon": A.medio,
+    "Estilo de batalla": A.estilo,
+    "Pokémon que quiere en la vida real": A.real,
+    "Resultado que le salió": resultado
+  };
+  if(!FORM_ENDPOINT){ console.log("Sin endpoint configurado. Respuestas:", payload); return; }
+  try{
+    fetch(FORM_ENDPOINT, {
+      method:"POST",
+      headers:{"Content-Type":"application/json","Accept":"application/json"},
+      body: JSON.stringify(payload),
+      keepalive:true
+    }).catch(() => {});
+  }catch(e){}
+}
+
+show();
+</script>
+</body>
+</html>
